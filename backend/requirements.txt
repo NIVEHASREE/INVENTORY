@@ -1,0 +1,4 @@
+axios
+express
+cors
+mongoose
