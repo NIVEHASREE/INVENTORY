@@ -10,14 +10,21 @@ export default function Suppliers() {
   };
 
   return (
-    <>
+    <section className="main">
       <div className="topbar">
-        <h1>Suppliers</h1>
+        <div className="topbar-title">
+          <p className="eyebrow">Partnership radar</p>
+          <h1>Supplier Network</h1>
+          <p className="topbar-subtitle">
+            Track relationship health, onboarding status, and response velocity.
+          </p>
+        </div>
       </div>
+
       <div className="grid">
         <SupplierList key={refresh} />
         <SupplierForm onAdd={handleSupplierAdded} />
       </div>
-    </>
+    </section>
   );
 }

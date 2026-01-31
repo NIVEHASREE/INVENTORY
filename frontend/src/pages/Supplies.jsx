@@ -10,15 +10,21 @@ export default function Supplies() {
   };
 
   return (
-    <>
+    <section className="main">
       <div className="topbar">
-        <h1>Supply Records</h1>
+        <div className="topbar-title">
+          <p className="eyebrow">Inbound tracking</p>
+          <h1>Supply Records</h1>
+          <p className="topbar-subtitle">
+            Log inbound deliveries and monitor costs per shipment in real time.
+          </p>
+        </div>
       </div>
 
       <div className="grid">
         <SupplyList key={refresh} />
         <SupplyForm onAdd={handleSupplyAdded} />
       </div>
-    </>
+    </section>
   );
 }

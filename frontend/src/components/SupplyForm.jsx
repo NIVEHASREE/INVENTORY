@@ -79,7 +79,7 @@ export default function SupplyForm({ onAdd }) {
             <option value="">Select Product</option>
             {products.map((product) => (
               <option key={product._id} value={product._id}>
-                {product.product_name}
+                {product.productName || product.product_name}
               </option>
             ))}
           </select>

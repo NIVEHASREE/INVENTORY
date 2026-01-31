@@ -1,22 +1,37 @@
-const Product = require("../models/Product");
+const productService = require("../services/productService");
+const asyncHandler = require("../middleware/asyncHandler");
 
 // GET all products
-exports.getProducts = async (req, res) => {
-  const products = await Product.find().sort({ createdAt: -1 });
+exports.getProducts = asyncHandler(async (req, res) => {
+  const products = await productService.getAll();
   res.json(products);
-};
+});
+
+// GET product by id
+exports.getProductById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const product = await productService.getById(id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  res.json(product);
+});
 
 // ADD product
-exports.addProduct = async (req, res) => {
-  const product = await Product.create(req.body);
-  res.json(product);
-};
+exports.addProduct = asyncHandler(async (req, res) => {
+  const product = await productService.create(req.body);
+  res.status(201).json(product);
+});
 
 // UPDATE product
-exports.updateProduct = async (req, res) => {
+exports.updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const updated = await Product.findByIdAndUpdate(id, req.body, {
-    new: true,
-  });
+  const updated = await productService.update(id, req.body);
   res.json(updated);
-};
+});
+
+// DELETE product
+exports.deleteProduct = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const removed = await productService.delete(id);
+  if (!removed) return res.status(404).json({ message: "Product not found" });
+  res.status(204).send();
+});

@@ -1,282 +1,144 @@
 import "../styles/inventory.css";
-import { useEffect, useState } from "react";
-import {
-  fetchProducts,
-  addProduct,
-  updateProduct,
-} from "../api/productApi";
+import { useEffect, useState, useMemo } from "react";
+import { fetchProducts, deleteProduct } from "../api/productApi";
+import ProductTable from "../components/ProductTable";
+import ProductForm from "../components/ProductForm";
+import ProductDetailModal from "../components/ProductDetailModal";
+import SupplierList from "../components/SupplierList";
+import SupplierForm from "../components/SupplierForm";
+import SupplyList from "../components/SupplyList";
+import SupplyForm from "../components/SupplyForm";
 
 export default function Inventory() {
   const [products, setProducts] = useState([]);
-  const [editProduct, setEditProduct] = useState(null);
+  const [activeSection, setActiveSection] = useState("products");
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [detailProduct, setDetailProduct] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-
-  const [form, setForm] = useState({
-    product_name: "",
-    category: "",
-    cost_price: "",
-    selling_price: "",
-    quantity_in_stock: "",
-  });
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [refreshKey]);
 
   const loadProducts = async () => {
     const res = await fetchProducts();
     setProducts(res.data);
   };
 
-  const submit = async () => {
-    await addProduct(form);
-    setForm({
-      product_name: "",
-      category: "",
-      cost_price: "",
-      selling_price: "",
-      quantity_in_stock: "",
-    });
-    loadProducts();
+  const handleDelete = async (p) => {
+    if (!window.confirm(`Delete product "${p.productName}"? This action cannot be undone.`)) return;
+    try {
+      await deleteProduct(p._id);
+      setRefreshKey((k) => k + 1);
+      alert("Product deleted");
+    } catch (err) {
+      alert(err?.response?.data?.message || "Unable to delete product");
+    }
   };
 
-  const filteredProducts = products.filter((product) =>
-    product.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleView = (p) => {
+    setDetailProduct(p);
+  };
+
+  const onSaved = () => {
+    setSelectedProduct(null);
+    setDetailProduct(null);
+    setRefreshKey((k) => k + 1);
+  };
+
+  const filteredProducts = useMemo(() => {
+    if (!searchTerm) return products;
+    const term = searchTerm.toLowerCase();
+    return products.filter(
+      (p) =>
+        p.productName.toLowerCase().includes(term) ||
+        p.productCategory.toLowerCase().includes(term)
+    );
+  }, [products, searchTerm]);
+
+  const lowStockCount = products.filter((p) => p.quantityAvailable < 5).length;
+  const totalInventoryValue = products
+    .reduce((sum, p) => sum + (p.quantityAvailable ?? 0) * (p.sellingPrice ?? 0), 0)
+    .toFixed(2);
+  const averageMargin = products.length
+    ? (
+        products.reduce((acc, p) => acc + ((p.sellingPrice ?? 0) - (p.costPrice ?? 0)), 0) /
+        products.length
+      ).toFixed(2)
+    : 0;
 
   return (
     <main className="main">
       <div className="topbar">
-        <h1>Inventory</h1>
-        <div className="search-box">
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="topbar-title">
+          <p className="eyebrow">Senthil Murugan Electricals</p>
+          <h1>Inventory</h1>
+          <p className="topbar-subtitle">Products, suppliers and inbound supplies in one place.</p>
+        </div>
+        <div className="topbar-actions">
+          <div className="search-box">
+            <input
+              type="text"
+              placeholder="Search products, categories..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="section-tabs">
+            <button className={`tab ${activeSection === "products" ? "active" : ""}`} onClick={() => setActiveSection("products")}>Products</button>
+            <button className={`tab ${activeSection === "suppliers" ? "active" : ""}`} onClick={() => setActiveSection("suppliers")}>Suppliers</button>
+            <button className={`tab ${activeSection === "supplies" ? "active" : ""}`} onClick={() => setActiveSection("supplies")}>Supplies</button>
+            <button type="button" className="ghost-btn" onClick={loadProducts}>Refresh</button>
+          </div>
         </div>
       </div>
 
       <div className="stats-container">
         <div className="stat-box">
+          <span className="stat-icon">📦</span>
           <div className="stat-title">Total Products</div>
           <div className="stat-value">{products.length}</div>
-          <div className="stat-change positive">
-            <span>▲</span> 12% from last month
-          </div>
+          <p className="stat-meta">{filteredProducts.length} currently visible</p>
         </div>
         <div className="stat-box">
+          <span className="stat-icon">⚠️</span>
           <div className="stat-title">Low Stock Items</div>
-          <div className="stat-value">{products.filter(p => p.quantity_in_stock < 5).length}</div>
-          <div className="stat-change negative">
-            <span>▼</span> 5 items need attention
-          </div>
+          <div className="stat-value">{lowStockCount}</div>
+          <p className="stat-meta">Threshold set at 5 units</p>
         </div>
         <div className="stat-box">
+          <span className="stat-icon">💰</span>
           <div className="stat-title">Total Value</div>
-          <div className="stat-value">
-            ${products.reduce((sum, p) => sum + (p.quantity_in_stock * p.selling_price), 0).toFixed(2)}
-          </div>
-          <div className="stat-change positive">
-            <span>▲</span> 8% from last month
-          </div>
+          <div className="stat-value">${totalInventoryValue}</div>
+          <p className="stat-meta">Avg margin ${averageMargin}</p>
         </div>
       </div>
 
       <div className="grid">
-        {/* TABLE */}
-        <div className="card">
-          <div className="card-header">
-            <h3>Inventory Overview</h3>
-            <button className="primary-btn" style={{width: 'auto', margin: 0}}>
-              Add Product
-            </button>
-          </div>
+        {activeSection === "products" && (
+          <>
+            <ProductTable products={filteredProducts} onEdit={(p) => setSelectedProduct(p)} onDelete={handleDelete} onView={handleView} />
+            <ProductForm key={selectedProduct?._id || "new"} product={selectedProduct} onSaved={onSaved} />
+            {detailProduct && (
+              <ProductDetailModal product={detailProduct} onClose={() => setDetailProduct(null)} />
+            )}
+          </>
+        )} 
 
-          <table className="inventory-table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Stock</th>
-                <th>Pricing</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
+        {activeSection === "suppliers" && (
+          <>
+            <SupplierList key={refreshKey} />
+            <SupplierForm onAdd={() => setRefreshKey((k) => k + 1)} />
+          </>
+        )}
 
-            <tbody>
-              {filteredProducts.map((p) => (
-                <tr key={p._id}>
-                  <td>{p.product_name}</td>
-                  <td>{p.category}</td>
-                  <td>{p.quantity_in_stock}</td>
-                  <td>
-                    ${p.cost_price} → ${p.selling_price}
-                  </td>
-                  <td>
-                    <span
-                      className={
-                        p.quantity_in_stock < 5
-                          ? "status-low"
-                          : "status-ok"
-                      }
-                    >
-                      {p.quantity_in_stock < 5 ? "Low Stock" : "In stock"}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      className="edit-btn"
-                      onClick={() => setEditProduct(p)}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* FORM */}
-        <div className="form-box">
-          {!editProduct ? (
-            <>
-              <h3>Register Product</h3>
-
-              <div className="form-group">
-                <input
-                  placeholder="Product name"
-                  value={form.product_name}
-                  onChange={(e) =>
-                    setForm({ ...form, product_name: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <input
-                  placeholder="Category"
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm({ ...form, category: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <input
-                  type="number"
-                  placeholder="Cost price"
-                  value={form.cost_price}
-                  onChange={(e) =>
-                    setForm({ ...form, cost_price: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <input
-                  type="number"
-                  placeholder="Selling price"
-                  value={form.selling_price}
-                  onChange={(e) =>
-                    setForm({ ...form, selling_price: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <input
-                  type="number"
-                  placeholder="Quantity"
-                  value={form.quantity_in_stock}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      quantity_in_stock: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <button className="primary-btn" onClick={submit}>
-                Register Product
-              </button>
-            </>
-          ) : (
-            <>
-              <h3>Update Product</h3>
-
-              <div className="form-group">
-                <input value={editProduct.product_name} disabled />
-              </div>
-
-              <div className="form-group">
-                <input
-                  type="number"
-                  placeholder="Quantity"
-                  value={editProduct.quantity_in_stock}
-                  onChange={(e) =>
-                    setEditProduct({
-                      ...editProduct,
-                      quantity_in_stock: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <input
-                  type="number"
-                  placeholder="Cost price"
-                  value={editProduct.cost_price}
-                  onChange={(e) =>
-                    setEditProduct({
-                      ...editProduct,
-                      cost_price: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <input
-                  type="number"
-                  placeholder="Selling price"
-                  value={editProduct.selling_price}
-                  onChange={(e) =>
-                    setEditProduct({
-                      ...editProduct,
-                      selling_price: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <button
-                className="primary-btn"
-                onClick={async () => {
-                  await updateProduct(editProduct._id, editProduct);
-                  setEditProduct(null);
-                  loadProducts();
-                }}
-              >
-                Update
-              </button>
-
-              <button
-                className="secondary-btn"
-                onClick={() => setEditProduct(null)}
-              >
-                Cancel
-              </button>
-            </>
-          )}
-        </div>
+        {activeSection === "supplies" && (
+          <>
+            <SupplyList key={refreshKey} />
+            <SupplyForm onAdd={() => setRefreshKey((k) => k + 1)} />
+          </>
+        )}
       </div>
     </main>
   );
