@@ -9,6 +9,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api/products", require("./routes/productRoutes"));
+app.use("/api/suppliers", require("./routes/supplierRoutes"));
+app.use("/api/supplies", require("./routes/supplyRoutes"));
 
 app.listen(5000, () =>
   console.log("Server running on http://localhost:5000")
