@@ -1,4 +1,0 @@
-axios
-express
-cors
-mongoose
