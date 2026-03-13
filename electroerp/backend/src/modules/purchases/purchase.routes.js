@@ -12,6 +12,7 @@ import SupplierLedger from '../../models/SupplierLedger.model.js';
 import GSTLedger from '../../models/GSTLedger.model.js';
 import StockHistory from '../../models/StockHistory.model.js';
 import ActivityLog from '../../models/ActivityLog.model.js';
+import InventoryBatch from '../../models/InventoryBatch.model.js';
 import { calculateBillTotals } from '../../utils/gstCalculator.js';
 
 const router = express.Router();
@@ -79,6 +80,7 @@ router.post('/', requireRole('ADMIN', 'MANAGER'), asyncHandler(async (req, res) 
         });
 
         // Increase stock
+        const batchesToCreate = [];
         await Promise.all(enrichedItems.map(async (item) => {
             await Product.findByIdAndUpdate(item.product, { $inc: { stockQty: item.quantity } });
             await StockHistory.create({
@@ -86,7 +88,19 @@ router.post('/', requireRole('ADMIN', 'MANAGER'), asyncHandler(async (req, res) 
                 quantity: item.quantity, referenceId: purchase._id,
                 referenceNo: purchaseNumber, createdBy: req.user._id,
             });
+            batchesToCreate.push({
+                productId: item.product,
+                purchaseId: purchase._id,
+                quantityPurchased: item.quantity,
+                quantityRemaining: item.quantity,
+                costPerUnit: item.purchasePrice,
+                purchaseDate: purchase.createdAt || new Date()
+            });
         }));
+
+        if (batchesToCreate.length > 0) {
+            await InventoryBatch.insertMany(batchesToCreate);
+        }
 
         // GST INPUT entry
         const gstDate = new Date();
@@ -126,21 +140,57 @@ router.post('/', requireRole('ADMIN', 'MANAGER'), asyncHandler(async (req, res) 
 }));
 
 router.get('/', requireRole('ADMIN', 'MANAGER'), asyncHandler(async (req, res) => {
-    const { page = 1, limit = 20, supplierId, startDate, endDate } = req.query;
+    const { page = 1, limit = 100, supplierId, startDate, endDate, status, minAmount, maxAmount, search } = req.query;
     const query = {};
+
+    console.log('--- Purchase Filter Request ---');
+    console.log('Query Params:', req.query);
+
     if (supplierId) query.supplier = supplierId;
+    if (status) query.paymentStatus = status.toLowerCase();
+
     if (startDate || endDate) {
         query.purchaseDate = {};
         if (startDate) query.purchaseDate.$gte = new Date(startDate);
-        if (endDate) query.purchaseDate.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            query.purchaseDate.$lte = end;
+        }
     }
-    const skip = (page - 1) * limit;
+
+    if (minAmount || maxAmount) {
+        query.grandTotal = {};
+        if (minAmount) query.grandTotal.$gte = parseFloat(minAmount);
+        if (maxAmount) query.grandTotal.$lte = parseFloat(maxAmount);
+    }
+
+    if (search) {
+        query.$or = [
+            { purchaseNumber: { $regex: search, $options: 'i' } },
+            { supplierInvoiceNo: { $regex: search, $options: 'i' } }
+        ];
+    }
+
+    console.log('Constructed Mongo Query:', JSON.stringify(query, null, 2));
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
     const [purchases, total] = await Promise.all([
-        Purchase.find(query).sort({ purchaseDate: -1 }).skip(skip).limit(parseInt(limit))
-            .populate('supplier', 'name phone').populate('createdBy', 'name').lean(),
+        Purchase.find(query)
+            .sort({ purchaseDate: -1 })
+            .skip(skip)
+            .limit(parseInt(limit))
+            .populate('supplier', 'name phone')
+            .populate('createdBy', 'name')
+            .lean(),
         Purchase.countDocuments(query),
     ]);
-    res.status(200).json(new ApiResponse(200, purchases, 'Purchases fetched', { page: parseInt(page), total }));
+
+    res.status(200).json(new ApiResponse(200, purchases, 'Purchases fetched', {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+    }));
 }));
 
 router.get('/:id', requireRole('ADMIN', 'MANAGER'), asyncHandler(async (req, res) => {

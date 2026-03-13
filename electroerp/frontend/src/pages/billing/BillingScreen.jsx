@@ -83,6 +83,8 @@ export default function BillingScreen() {
 
     const grandTotal = Math.round(totals.total);
 
+    const [showSuccess, setShowSuccess] = useState(false);
+
     const handleSubmit = async () => {
         if (items.length === 0) { toast.error('POS sequence requires item allocation'); return; }
         setSubmitting(true);
@@ -102,12 +104,46 @@ export default function BillingScreen() {
                 isInterstate,
             });
             setLastBill(data.data);
-            clearCart();
-            setCustomer({ name: '', phone: '', gstin: '' });
+            setShowSuccess(true);
             toast.success(`Transaction ${data.data.billNumber} finalized`);
         } catch (err) {
             toast.error(err.response?.data?.message || 'Finalization failure');
         } finally { setSubmitting(false); }
+    };
+
+    const handleNewBill = () => {
+        clearCart();
+        setCustomer({ name: '', phone: '', gstin: '' });
+        setLastBill(null);
+        setShowSuccess(false);
+    };
+
+    const handlePrintInvoice = async () => {
+        if (!lastBill) return;
+        try {
+            const response = await api.get(`/bills/${lastBill._id}/pdf`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            window.open(url, '_blank');
+        } catch (err) {
+            toast.error('Failed to prepare invoice for printing');
+        }
+    };
+
+    const handleDownloadInvoice = async () => {
+        if (!lastBill) return;
+        try {
+            const response = await api.get(`/bills/${lastBill._id}/pdf`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Invoice_${lastBill.billNumber}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            toast.error('Failed to download invoice');
+        }
     };
 
     return (
@@ -410,6 +446,44 @@ export default function BillingScreen() {
                     </button>
                 </div>
             </div>
+            {/* Success Modal */}
+            {showSuccess && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" />
+                    <div className="relative bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 p-10 text-center">
+                        <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner ring-8 ring-emerald-50/50">
+                            <CheckCircle size={48} strokeWidth={2.5} />
+                        </div>
+                        
+                        <h3 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Bill Generated Successfully</h3>
+                        <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] mb-10">Transactional Protocol: {lastBill?.billNumber}</p>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button
+                                onClick={handleDownloadInvoice}
+                                className="flex items-center justify-center gap-3 bg-slate-50 hover:bg-slate-100 text-slate-600 px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                            >
+                                <ShoppingCart size={20} className="text-blue-500" /> Download Invoice
+                            </button>
+                            <button
+                                onClick={handlePrintInvoice}
+                                className="flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-600/20 transition-all active:scale-95"
+                            >
+                                <Printer size={20} className="text-blue-200" /> Print Invoice
+                            </button>
+                        </div>
+                        
+                        <button
+                            onClick={handleNewBill}
+                            className="w-full mt-6 bg-slate-900 hover:bg-black text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-900/10 transition-all active:scale-95 flex items-center justify-center gap-3"
+                        >
+                            <Plus size={20} className="text-emerald-400" /> Initiate New Bill
+                        </button>
+                        
+                        <p className="mt-8 text-[10px] font-bold text-slate-300 uppercase tracking-widest">Protocol finalized at {new Date().toLocaleTimeString()}</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

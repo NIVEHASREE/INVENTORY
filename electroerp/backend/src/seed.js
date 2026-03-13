@@ -40,12 +40,11 @@ const roles = [
         ],
     },
     {
-        name: 'ACCOUNTANT',
-        description: 'View reports and GST data',
+        name: 'STAFF',
+        description: 'Inventory management and maintenance',
         permissions: [
-            { resource: 'gst', actions: ['read', 'export'] },
-            { resource: 'reports', actions: ['read', 'export'] },
-            { resource: 'bills', actions: ['read'] },
+            { resource: 'products', actions: ['create', 'read', 'update', 'delete'] },
+            { resource: 'categories', actions: ['read'] },
         ],
     },
 ];

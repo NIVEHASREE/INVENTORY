@@ -10,6 +10,7 @@ import logger from './config/logger.js';
 // Route imports
 import authRoutes from './modules/auth/auth.routes.js';
 import userRoutes from './modules/users/user.routes.js';
+import roleRoutes from './modules/users/role.routes.js';
 import productRoutes from './modules/products/product.routes.js';
 import categoryRoutes from './modules/categories/category.routes.js';
 import supplierRoutes from './modules/suppliers/supplier.routes.js';
@@ -59,6 +60,7 @@ app.get('/api/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/roles', roleRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);

@@ -16,7 +16,7 @@ const UserSchema = new Schema({
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
-UserSchema.index({ email: 1 });
+
 UserSchema.index({ role: 1, isActive: 1 });
 
 UserSchema.pre('save', async function () {

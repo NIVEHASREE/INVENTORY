@@ -1,199 +1,338 @@
-import { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, FileText, BarChart3, Filter, Calendar, IndianRupee, PieChart, Activity } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    PieChart, Pie, Cell, BarChart, Bar, Legend
+} from 'recharts';
+import {
+    TrendingUp, TrendingDown, DollarSign, FileText, BarChart3, Filter,
+    Calendar, IndianRupee, PieChart as PieIcon, Activity, Users, Package, Clock
+} from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 const fmtRs = (n) => `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n || 0)}`;
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function SalesReport() {
-    const [data, setData] = useState([]);
+    const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [groupBy, setGroupBy] = useState('day');
-    const [range, setRange] = useState({ startDate: '', endDate: '' });
+    const [days, setDays] = useState(30);
 
     useEffect(() => {
         setLoading(true);
-        const params = new URLSearchParams({ groupBy, ...Object.fromEntries(Object.entries(range).filter(([, v]) => v)) });
-        api.get(`/reports/sales?${params}`)
-            .then(r => setData(r.data.data))
-            .catch(() => toast.error('Failed to anchor sales sequence'))
+        api.get(`/reports/analytics?days=${days}`)
+            .then(r => setAnalytics(r.data.data))
+            .catch(() => toast.error('Failed to anchor analytics stream'))
             .finally(() => setLoading(false));
-    }, [groupBy, range]);
+    }, [days]);
 
-    const totals = data.reduce((acc, d) => ({
-        revenue: acc.revenue + d.revenue,
-        profit: acc.profit + d.profit,
-        gst: acc.gst + d.totalGST,
-        bills: acc.bills + d.billCount,
-    }), { revenue: 0, profit: 0, gst: 0, bills: 0 });
+    // Generate LeetCode-style horizontal activity data
+    const activityGrid = useMemo(() => {
+        if (!analytics?.activity) return [];
+        
+        // Target: Last 26 weeks (~6 months)
+        const weeks = 26;
+        const totalDays = weeks * 7;
+        const grid = [];
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        // Find the start date (most recent Sunday)
+        const dayOfWeek = today.getDay();
+        const endDate = new Date(today);
+        
+        for(let i = 0; i < weeks; i++) {
+            const week = [];
+            for(let j = 0; j < 7; j++) {
+                // Calculate back from end date
+                const d = new Date(endDate);
+                d.setDate(endDate.getDate() - (((weeks - 1 - i) * 7) + (6 - j)));
+                const dateStr = d.toISOString().split('T')[0];
+                const data = analytics.activity.find(a => a.date === dateStr);
+                week.push({
+                    date: dateStr,
+                    count: data?.count || 0,
+                    day: d.toLocaleString('en-us', { weekday: 'short' })
+                });
+            }
+            grid.push(week);
+        }
+        return grid;
+    }, [analytics]);
+
+    if (loading && !analytics) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.2em]">Synchronizing Intelligence...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const { daily, categories, products, customers } = analytics;
+
+    // Derived Stats
+    const totalRev = daily.reduce((acc, d) => acc + d.revenue, 0);
+    const totalProfit = daily.reduce((acc, d) => acc + d.profit, 0);
+    const avgMargin = totalRev > 0 ? (totalProfit / totalRev * 100).toFixed(1) : 0;
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto pb-10">
+        <div className="space-y-8 max-w-7xl mx-auto pb-20 px-4">
+            {/* Header section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Market Intelligence</h1>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">Yield Intelligence</h1>
                     <p className="text-slate-500 text-sm mt-1 flex items-center gap-2">
-                        <span className="flex h-2 w-2 rounded-full bg-blue-600"></span>
-                        Strategic Revenue & Performance Analysis
+                        <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse"></span>
+                        Strategic Revenue & Profit Optimization
                     </p>
                 </div>
-                <div className="flex bg-white p-1.5 rounded-[1.5rem] border border-slate-50 shadow-sm gap-2">
-                    <input type="date" value={range.startDate} onChange={e => setRange(r => ({ ...r, startDate: e.target.value }))}
-                        className="px-4 py-2 bg-slate-50 border border-transparent rounded-xl text-[10px] font-black uppercase tracking-widest focus:outline-none focus:bg-white focus:border-blue-500 transition-all shadow-inner" />
-                    <input type="date" value={range.endDate} onChange={e => setRange(r => ({ ...r, endDate: e.target.value }))}
-                        className="px-4 py-2 bg-slate-50 border border-transparent rounded-xl text-[10px] font-black uppercase tracking-widest focus:outline-none focus:bg-white focus:border-blue-500 transition-all shadow-inner" />
-                    <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
-                        className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-4 focus:ring-slate-900/10 cursor-pointer transition-all">
-                        <option value="day">Daily Flux</option>
-                        <option value="month">Monthly Cycle</option>
-                    </select>
+                <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
+                    {[7, 30, 90, 365].map(v => (
+                        <button
+                            key={v}
+                            onClick={() => setDays(v)}
+                            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${days === v ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-900'}`}
+                        >
+                            {v === 365 ? '1 Year' : `${v} Days`}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Elite Summary Dashboard */}
+            {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                    { label: 'Aggregate Revenue', value: fmtRs(totals.revenue), clr: 'bg-blue-600', sub: 'Gross Inflow', icon: IndianRupee },
-                    { label: 'Strategic Profit', value: fmtRs(totals.profit), clr: 'bg-emerald-600', sub: 'Net Appreciation', icon: TrendingUp },
-                    { label: 'Tax Aggregator', value: fmtRs(totals.gst), clr: 'bg-slate-900', sub: 'GST Custody', icon: PieChart },
-                    { label: 'Volume Matrix', value: totals.bills, clr: 'bg-blue-500', sub: 'Transactions', icon: Activity },
-                ].map(c => (
-                    <div key={c.label} className="bg-white rounded-[2rem] border border-slate-50 shadow-sm p-6 relative overflow-hidden group">
+                    { label: 'Network Revenue', value: fmtRs(totalRev), icon: IndianRupee, color: 'text-blue-600', bg: 'bg-blue-50' },
+                    { label: 'Strategic Profit', value: fmtRs(totalProfit), icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    { label: 'Efficiency Margin', value: `${avgMargin}%`, icon: Activity, color: 'text-amber-600', bg: 'bg-amber-50' },
+                    { label: 'Active Reach', value: customers.totalUnique, icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' },
+                ].map((kpi, i) => (
+                    <div key={i} className="bg-white rounded-[2.5rem] p-8 border border-slate-50 shadow-sm hover:shadow-xl hover:shadow-slate-200/40 transition-all group overflow-hidden relative">
                         <div className="relative z-10">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{c.label}</p>
-                            <p className="text-2xl font-black text-slate-900">{c.value}</p>
-                            <div className="mt-6 flex items-center justify-between">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{c.sub}</span>
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-lg ${c.clr} transform group-hover:scale-110 transition-transform`}>
-                                    <c.icon size={14} />
-                                </div>
+                            <div className={`w-12 h-12 ${kpi.bg} ${kpi.color} rounded-2xl flex items-center justify-center mb-6 shadow-inner group-hover:scale-110 transition-transform`}>
+                                <kpi.icon size={20} />
                             </div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</p>
+                            <p className="text-3xl font-black text-slate-900">{kpi.value}</p>
                         </div>
-                        <div className="absolute -bottom-2 -right-2 w-24 h-24 bg-slate-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700 pointer-events-none" />
+                        <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-slate-50 rounded-full opacity-40 group-hover:scale-150 transition-transform duration-700 pointer-events-none" />
                     </div>
                 ))}
             </div>
 
-            {/* Visual Analytics Engine */}
-            <div className="bg-white rounded-[3rem] border border-slate-50 shadow-sm p-10 relative overflow-hidden">
-                <div className="flex items-center justify-between mb-10">
-                    <div>
-                        <h2 className="text-lg font-black text-slate-900 tracking-tight">Growth Projection Matrix</h2>
-                        <p className="text-[10px] px-1 font-black text-slate-400 uppercase tracking-widest mt-1 italic">Interpreting Revenue vs Profit Yield</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Main Area Chart */}
+                <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 border border-slate-50 shadow-sm">
+                    <div className="flex items-center justify-between mb-10">
+                        <div>
+                            <h2 className="text-xl font-black text-slate-900 tracking-tight">Revenue Dynamics</h2>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">Temporal Flux of Gross Performance</p>
+                        </div>
                     </div>
-                    <div className="flex gap-4">
-                        <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-sm shadow-blue-600/30" />
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/30" />
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Profit</span>
-                        </div>
+                    <div className="h-[350px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={daily}>
+                                <defs>
+                                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/><stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="_id" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#94a3b8'}} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#94a3b8'}} tickFormatter={v => `₹${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+                                <Tooltip
+                                    contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1.5rem', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
+                                    itemStyle={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase' }}
+                                    formatter={(v) => fmtRs(v)}
+                                />
+                                <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
+                                <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorProf)" name="Profit" />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
 
-                <div className="h-[320px] w-full">
-                    {loading ? (
-                        <div className="skeleton h-full w-full rounded-[2rem]" />
-                    ) : (
+                {/* Donut Chart */}
+                <div className="bg-white rounded-[3rem] p-10 border border-slate-50 shadow-sm flex flex-col items-center">
+                    <div className="w-full mb-10 text-center">
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Resource Allocation</h2>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">Category Contribution Index</p>
+                    </div>
+                    <div className="h-[280px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={data}>
-                                <defs>
-                                    <linearGradient id="vRev" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="vPro" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="8 8" stroke="#f1f5f9" vertical={false} />
-                                <XAxis
-                                    dataKey="_id"
-                                    tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    dy={15}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={v => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        background: '#0f172a',
-                                        borderRadius: '1.5rem',
-                                        border: 'none',
-                                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-                                        padding: '1.5rem'
-                                    }}
-                                    itemStyle={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}
-                                    labelStyle={{ fontSize: '12px', fontWeight: 900, color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase' }}
-                                    formatter={(v) => fmtRs(v)}
-                                />
-                                <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={4} fill="url(#vRev)" name="Revenue" />
-                                <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={4} fill="url(#vPro)" name="Profit" />
-                            </AreaChart>
+                            <PieChart>
+                                <Pie
+                                    data={categories.length > 0 ? categories : [{categoryName: 'Empty', revenue: 1}]}
+                                    dataKey="revenue"
+                                    nameKey="categoryName"
+                                    innerRadius={70}
+                                    outerRadius={100}
+                                    paddingAngle={8}
+                                >
+                                    {categories.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
                         </ResponsiveContainer>
-                    )}
+                    </div>
+                    <div className="w-full mt-6 space-y-2">
+                        {categories.slice(0, 4).map((c, i) => (
+                            <div key={i} className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                                    {c.categoryName || 'Unclassified'}
+                                </div>
+                                <span className="text-slate-900">{((c.revenue / totalRev) * 100).toFixed(0)}%</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            {/* Tabular Analysis */}
-            <div className="bg-white rounded-[3rem] border border-slate-50 shadow-sm overflow-hidden">
-                <div className="px-10 py-8 border-b border-slate-50 flex items-center justify-between">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                        <FileText size={16} className="text-blue-600" /> Historical Performance Matrix
-                    </h2>
+            {/* Horizontal Activity Map (LeetCode Style) */}
+            <div className="bg-white rounded-[3.5rem] p-12 border border-slate-50 shadow-sm overflow-hidden">
+                <div className="flex items-center gap-4 mb-10">
+                     <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl">
+                        <Calendar size={20} />
+                     </div>
+                     <div>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Operational Activity Map</h2>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 italic">Yearly Intensity Distribution Matrix</p>
+                     </div>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="text-left text-[11px] font-black text-slate-400 uppercase tracking-[0.15em] bg-slate-50/20">
-                                <th className="px-10 py-6">Epoch / Period</th>
-                                <th className="px-5 py-6 text-center">Transactions</th>
-                                <th className="px-5 py-6 text-right">Revenue Load</th>
-                                <th className="px-5 py-6 text-right text-red-500">Attrition (Disc)</th>
-                                <th className="px-5 py-6 text-right text-amber-500">Tax Custody</th>
-                                <th className="px-5 py-6 text-right text-emerald-600">Pure Appreciation</th>
-                                <th className="px-10 py-6 text-right">Unit Index</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {loading ? (
-                                Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan={7} className="px-10 py-6"><div className="skeleton h-10 w-full rounded-2xl" /></td></tr>)
-                            ) : data.map((row, i) => (
-                                <tr key={i} className="group hover:bg-slate-50/30 transition-colors">
-                                    <td className="px-10 py-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white transition-all flex items-center justify-center font-black text-[10px] italic">
-                                                {row._id.slice(-2)}
-                                            </div>
-                                            <span className="font-black text-slate-700 tracking-tight">{row._id}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-6 text-center font-black text-slate-500">{row.billCount}</td>
-                                    <td className="px-5 py-6 text-right font-black text-blue-600">{fmtRs(row.revenue)}</td>
-                                    <td className="px-5 py-6 text-right font-bold text-red-400">{fmtRs(row.discountGiven)}</td>
-                                    <td className="px-5 py-6 text-right font-bold text-amber-500">{fmtRs(row.totalGST)}</td>
-                                    <td className="px-5 py-6 text-right font-black text-emerald-600">{fmtRs(row.profit)}</td>
-                                    <td className="px-10 py-6 text-right">
-                                        <span className="text-[10px] font-black text-slate-400 group-hover:text-slate-900 transition-colors">{fmtRs(row.avgBillValue)}</span>
-                                    </td>
-                                </tr>
+
+                <div className="flex justify-center">
+                    <div className="w-full overflow-x-auto pb-6 scrollbar-thin">
+                        <div className="flex gap-1.5 min-w-max">
+                            {/* Day labels column */}
+                            <div className="flex flex-col justify-between py-6 pr-4 text-[8px] font-black text-slate-300 uppercase h-[130px]">
+                                <span>Mon</span>
+                                <span>Wed</span>
+                                <span>Fri</span>
+                            </div>
+                            
+                            {/* The Grid - Weeks as Columns */}
+                            {activityGrid.map((week, wIdx) => (
+                                <div key={wIdx} className="flex flex-col gap-1.5">
+                                    {week.map((day, dIdx) => {
+                                        const intensity = day.count;
+                                        const opacity = Math.min(intensity * 0.2 + 0.1, 1);
+                                        return (
+                                            <div 
+                                                key={dIdx} 
+                                                title={`${day.date}: ${intensity} Transactions`}
+                                                className="w-3.5 h-3.5 rounded-[3px] transition-all hover:ring-2 hover:ring-blue-600 cursor-crosshair"
+                                                style={{ 
+                                                    backgroundColor: intensity > 0 ? '#2563eb' : '#f8fafc',
+                                                    opacity: intensity > 0 ? opacity : 1
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                </div>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
-                {!loading && data.length === 0 && (
-                    <div className="py-20 flex flex-col items-center justify-center bg-slate-50/10">
-                        <BarChart3 size={48} className="text-slate-100 mb-4" />
-                        <p className="text-slate-400 text-xs font-black uppercase tracking-widest">Matrix Void Detected for this Sequence</p>
+                        </div>
+                        
+                        {/* Month labels footer */}
+                        <div className="flex gap-1.5 min-w-max pl-[45px] mt-4">
+                             {activityGrid.map((week, wIdx) => {
+                                 // Show month name every 4 weeks
+                                 if (wIdx % 4 === 0) {
+                                     const month = new Date(week[0].date).toLocaleString('default', { month: 'short' });
+                                     return <span key={wIdx} className="w-[84px] text-[10px] font-bold text-slate-400 uppercase tracking-widest">{month}</span>;
+                                 }
+                                 return null;
+                             })}
+                        </div>
                     </div>
-                )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 mt-8 pr-4">
+                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Minimal</span>
+                    <div className="flex gap-1">
+                        {[0.1, 0.4, 0.7, 1.0].map(o => (
+                            <div key={o} className="w-3 h-3 rounded-[2px] bg-blue-600" style={{ opacity: o }} />
+                        ))}
+                    </div>
+                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Peak Load</span>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Product Bar Chart */}
+                <div className="bg-white rounded-[3rem] p-10 border border-slate-50 shadow-sm">
+                    <div className="mb-10">
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Financial Yields</h2>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">Product Contribution vs Realized Gain</p>
+                    </div>
+                    <div className="h-[320px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={products} layout="vertical" margin={{ left: 40 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#64748b'}} width={100} />
+                                <Tooltip 
+                                    cursor={{fill: 'transparent'}}
+                                    contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem' }}
+                                    itemStyle={{ fontSize: 10, fontWeight: 900, color: '#fff' }}
+                                />
+                                <Bar dataKey="profit" fill="#10b981" radius={[0, 10, 10, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Consumer Matrix */}
+                <div className="bg-white rounded-[3rem] p-10 border border-slate-50 shadow-sm">
+                    <div className="mb-10 text-center">
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Consumer Matrix</h2>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">CRM Loyalty & Reach Index</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6 items-center">
+                        <div className="space-y-6">
+                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 items-center justify-center flex flex-col">
+                                <Users size={24} className="text-blue-600 mb-2" />
+                                <p className="text-[9px] font-black text-slate-400 uppercase">Named Clients</p>
+                                <p className="text-3xl font-black text-slate-900">{customers.distribution.namedBills}</p>
+                            </div>
+                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 items-center justify-center flex flex-col">
+                                <TrendingUp size={24} className="text-emerald-600 mb-2" />
+                                <p className="text-[9px] font-black text-slate-400 uppercase">Avg Value</p>
+                                <p className="text-3xl font-black text-slate-900">{fmtRs(totalRev / (daily.length || 1))}</p>
+                            </div>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Auth Integrity</p>
+                                <div className="relative w-32 h-32 mx-auto">
+                                    <svg viewBox="0 0 36 36" className="w-32 h-32">
+                                        <path className="text-slate-100" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        <path 
+                                            className="text-blue-500" 
+                                            strokeDasharray={`${(customers.distribution.namedBills / (customers.distribution.totalBills||1)*100).toFixed(0)}, 100`} 
+                                            strokeWidth="3" 
+                                            strokeLinecap="round" 
+                                            stroke="currentColor" 
+                                            fill="none" 
+                                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
+                                        />
+                                    </svg>
+                                    <div className="absolute inset-0 flex items-center justify-center font-black text-xl">
+                                        {((customers.distribution.namedBills / (customers.distribution.totalBills||1))*100).toFixed(0)}%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

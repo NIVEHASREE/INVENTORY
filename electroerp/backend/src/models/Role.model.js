@@ -12,7 +12,7 @@ const RoleSchema = new Schema({
         type: String,
         required: true,
         unique: true,
-        enum: ['ADMIN', 'MANAGER', 'CASHIER', 'ACCOUNTANT'],
+        enum: ['ADMIN', 'MANAGER', 'CASHIER', 'STAFF'],
     },
     permissions: [PermissionSchema],
     description: String,

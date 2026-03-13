@@ -4,6 +4,7 @@ import { generateTokenPair, verifyRefreshToken } from '../../utils/tokenService.
 
 export const loginUser = async (email, password) => {
     const user = await User.findOne({ email, isActive: true }).select('+password').populate('role');
+    console.log(`Login attempt for email: "${email}". User found: ${!!user}`);
     if (!user) throw new ApiError(401, 'Invalid email or password');
 
     const isMatch = await user.comparePassword(password);

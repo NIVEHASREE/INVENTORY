@@ -7,14 +7,14 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
-    { label: 'Control Center', to: '/', icon: LayoutDashboard },
-    { label: 'Terminals', to: '/billing', icon: ShoppingCart },
-    { label: 'Transmission Logs', to: '/billing/history', icon: History },
-    { label: 'Asset Matrix', to: '/inventory', icon: Package },
-    { label: 'Vector Partners', to: '/suppliers', icon: Truck },
-    { label: 'Acquisitions', to: '/purchases', icon: FileText },
-    { label: 'Tax Surveillance', to: '/gst', icon: Receipt },
-    { label: 'Yield Analytics', to: '/reports', icon: BarChart3 },
+    { label: 'Control Center', to: '/', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'ACCOUNTANT', 'STAFF'] },
+    { label: 'Terminals', to: '/billing', icon: ShoppingCart, roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
+    { label: 'Transmission Logs', to: '/billing/history', icon: History, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'ACCOUNTANT'] },
+    { label: 'Asset Matrix', to: '/inventory', icon: Package, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'STAFF'] },
+    { label: 'Vector Partners', to: '/suppliers', icon: Truck, roles: ['ADMIN', 'MANAGER'] },
+    { label: 'Acquisitions', to: '/purchases', icon: FileText, roles: ['ADMIN', 'MANAGER'] },
+    { label: 'Tax Surveillance', to: '/gst', icon: Receipt, roles: ['ADMIN', 'ACCOUNTANT'] },
+    { label: 'Yield Analytics', to: '/reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'] },
     { label: 'Authority Units', to: '/users', icon: Users, roles: ['ADMIN'] },
     { label: 'Surveillance Feed', to: '/activity-logs', icon: Activity, roles: ['ADMIN'] },
 ];
@@ -40,7 +40,7 @@ export default function Sidebar({ open, onClose }) {
                     </div>
                 </div>
                 <div>
-                    <h1 className="text-white font-black text-xl tracking-tighter leading-none">VANGUARD</h1>
+                    <h1 className="text-white font-black text-lg tracking-tighter leading-tight uppercase">SENTHIL MURUGAN ELECTRICALS</h1>
                     <p className="text-blue-500/60 text-[10px] font-black tracking-[0.3em] mt-1.5 uppercase">Electro ERP</p>
                 </div>
             </div>

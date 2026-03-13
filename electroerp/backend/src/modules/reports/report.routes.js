@@ -11,5 +11,6 @@ router.get('/sales-chart', reportController.getSalesChart);
 router.get('/top-products', reportController.getTopProducts);
 router.get('/category-revenue', reportController.getCategoryRevenue);
 router.get('/sales', requireRole('ADMIN', 'MANAGER', 'ACCOUNTANT'), reportController.getSalesReport);
+router.get('/analytics', requireRole('ADMIN', 'MANAGER', 'ACCOUNTANT'), reportController.getAdvancedAnalytics);
 
 export default router;

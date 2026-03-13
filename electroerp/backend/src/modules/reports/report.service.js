@@ -177,3 +177,81 @@ export const getSalesReport = async (startDate, endDate, groupBy = 'day') => {
         { $sort: { _id: 1 } },
     ]);
 };
+
+export const getAdvancedAnalytics = async (days = 30) => {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const [
+        dailyStats,
+        categoryStats,
+        productStats,
+        customerStats,
+        timeStats
+    ] = await Promise.all([
+        // Daily Revenue & Profit
+        Bill.aggregate([
+            { $match: { billDate: { $gte: startDate }, isCancelled: false } },
+            {
+                $group: {
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$billDate' } },
+                    revenue: { $sum: '$grandTotal' },
+                    profit: { $sum: '$profitAmount' },
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]),
+        // Category Distribution (Donut)
+        getCategoryRevenue(days),
+        // Product Profitability (Top 10)
+        Bill.aggregate([
+            { $match: { billDate: { $gte: startDate }, isCancelled: false } },
+            { $unwind: '$items' },
+            {
+                $group: {
+                    _id: '$items.product',
+                    name: { $first: '$items.productName' },
+                    revenue: { $sum: '$items.totalAmount' },
+                    profit: { $sum: '$items.profitAmount' },
+                    qty: { $sum: '$items.quantity' }
+                }
+            },
+            { $sort: { profit: -1 } },
+            { $limit: 10 }
+        ]),
+        // Customer Analytics
+        Bill.aggregate([
+            { $match: { billDate: { $gte: startDate }, isCancelled: false } },
+            {
+                $group: {
+                    _id: null,
+                    totalBills: { $sum: 1 },
+                    walkInBills: { $sum: { $cond: [{ $eq: ['$customer.phone', ''] }, 1, 0] } },
+                    namedBills: { $sum: { $cond: [{ $ne: ['$customer.phone', ''] }, 1, 0] } },
+                    uniqueCustomers: { $addToSet: '$customer.phone' }
+                }
+            }
+        ]),
+        // Activity Map (Last 365 days of transaction volume)
+        Bill.aggregate([
+            { $match: { billDate: { $gte: new Date(new Date().setFullYear(new Date().getFullYear() - 1)) }, isCancelled: false } },
+            {
+                $group: {
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$billDate' } },
+                    count: { $sum: 1 }
+                }
+            }
+        ])
+    ]);
+
+    return {
+        daily: dailyStats,
+        categories: categoryStats,
+        products: productStats,
+        customers: {
+            distribution: customerStats[0] || { totalBills: 0, walkInBills: 0, namedBills: 0, uniqueCustomers: [] },
+            totalUnique: customerStats[0]?.uniqueCustomers?.length || 0
+        },
+        activity: timeStats.map(s => ({ date: s._id, count: s.count }))
+    };
+};

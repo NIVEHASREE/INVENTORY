@@ -139,7 +139,7 @@ export default function Dashboard() {
                         <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-xl shadow-slate-900/20">
                             <ShieldCheck size={20} />
                         </div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Vanguard ERP Matrix</h1>
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">SENTHIL MURUGAN ELECTRICALS</h1>
                     </div>
                     <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] ml-13 flex items-center gap-2">
                         <Globe size={12} className="text-blue-600" /> Authorized Surveillance Terminal <span className="text-slate-200">|</span> {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}

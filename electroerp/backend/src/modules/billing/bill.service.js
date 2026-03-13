@@ -4,6 +4,8 @@ import Product from '../../models/Product.model.js';
 import GSTLedger from '../../models/GSTLedger.model.js';
 import StockHistory from '../../models/StockHistory.model.js';
 import ActivityLog from '../../models/ActivityLog.model.js';
+import InventoryBatch from '../../models/InventoryBatch.model.js';
+import SaleBatchAllocation from '../../models/SaleBatchAllocation.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { calculateBillTotals } from '../../utils/gstCalculator.js';
 import { generateInvoicePDF } from '../../utils/pdfGenerator.js';
@@ -20,14 +22,11 @@ const generateBillNumber = async () => {
 };
 
 export const createBill = async (billData, userId) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
         // 1. Enrich items with product data
         const enrichedItems = await Promise.all(
             billData.items.map(async (item) => {
-                const product = await Product.findById(item.product).session(session);
+                const product = await Product.findById(item.product);
                 if (!product) throw new ApiError(404, `Product not found: ${item.product}`);
                 if (!product.isActive) throw new ApiError(400, `Product ${product.name} is inactive`);
                 if (product.stockQty < item.quantity) {
@@ -79,15 +78,17 @@ export const createBill = async (billData, userId) => {
             qrCodeData,
             createdBy: userId,
             notes: billData.notes,
-        }], { session });
+        }]);
 
-        // 5. Reduce stock + create stock history
+        // 5. Reduce stock + create stock history + FIFO batch allocation
+        let totalCOGS = 0;
+        const allocationsToCreate = [];
+
         await Promise.all(
             totals.processedItems.map(async (item) => {
                 await Product.findByIdAndUpdate(
                     item.product,
-                    { $inc: { stockQty: -item.quantity } },
-                    { session }
+                    { $inc: { stockQty: -item.quantity } }
                 );
                 await StockHistory.create([{
                     product: item.product,
@@ -96,9 +97,52 @@ export const createBill = async (billData, userId) => {
                     referenceId: bill._id,
                     referenceNo: billNumber,
                     createdBy: userId,
-                }], { session });
+                }]);
+
+                let remainingQty = item.quantity;
+                let itemCogs = 0;
+
+                const batches = await InventoryBatch.find({
+                    productId: item.product,
+                    quantityRemaining: { $gt: 0 }
+                }).sort({ purchaseDate: 1 });
+
+                for (const batch of batches) {
+                    if (remainingQty <= 0) break;
+
+                    const available = batch.quantityRemaining;
+                    const allocateQty = Math.min(available, remainingQty);
+
+                    batch.quantityRemaining -= allocateQty;
+                    await batch.save();
+
+                    remainingQty -= allocateQty;
+                    itemCogs += allocateQty * batch.costPerUnit;
+
+                    allocationsToCreate.push({
+                        saleId: bill._id,
+                        productId: item.product,
+                        batchId: batch._id,
+                        quantity: allocateQty,
+                        costPerUnit: batch.costPerUnit
+                    });
+                }
+
+                if (remainingQty > 0) {
+                    itemCogs += remainingQty * item.costPrice;
+                }
+
+                totalCOGS += itemCogs;
             })
         );
+
+        if (allocationsToCreate.length > 0) {
+            await SaleBatchAllocation.insertMany(allocationsToCreate);
+        }
+
+        bill.profitAmount = totals.totalTaxable - totalCOGS; // Update profit based on true COGS
+        await bill.save();
+
 
         // 6. GST Ledger - OUTPUT entry for each unique HSN/rate combo
         const gstDate = new Date(bill.billDate);
@@ -121,10 +165,7 @@ export const createBill = async (billData, userId) => {
                 gstin: billData.customer?.gstin || '',
             },
             createdBy: userId,
-        }], { session });
-
-        await session.commitTransaction();
-        session.endSession();
+        }]);
 
         // 7. Generate PDF asynchronously (after transaction)
         try {
@@ -147,8 +188,6 @@ export const createBill = async (billData, userId) => {
 
         return bill;
     } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
         throw error;
     }
 };
@@ -196,26 +235,22 @@ export const getBillById = async (id) => {
 };
 
 export const cancelBill = async (billId, userId) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-        const bill = await Bill.findById(billId).session(session);
+        const bill = await Bill.findById(billId);
         if (!bill) throw new ApiError(404, 'Bill not found');
         if (bill.isCancelled) throw new ApiError(400, 'Bill is already cancelled');
 
         bill.isCancelled = true;
         bill.cancelledAt = new Date();
         bill.cancelledBy = userId;
-        await bill.save({ session });
+        await bill.save();
 
         // Restore stock
         await Promise.all(
             bill.items.map(async (item) => {
                 await Product.findByIdAndUpdate(
                     item.product,
-                    { $inc: { stockQty: item.quantity } },
-                    { session }
+                    { $inc: { stockQty: item.quantity } }
                 );
                 await StockHistory.create([{
                     product: item.product,
@@ -225,15 +260,21 @@ export const cancelBill = async (billId, userId) => {
                     referenceNo: bill.billNumber,
                     notes: 'Bill cancelled - stock restored',
                     createdBy: userId,
-                }], { session });
+                }]);
             })
         );
 
-        // Remove GST ledger entry
-        await GSTLedger.deleteMany({ referenceId: billId }, { session });
+        // Restore FIFO batches
+        const allocations = await SaleBatchAllocation.find({ saleId: billId });
+        for (const alloc of allocations) {
+            await InventoryBatch.findByIdAndUpdate(alloc.batchId, {
+                $inc: { quantityRemaining: alloc.quantity }
+            });
+        }
+        await SaleBatchAllocation.deleteMany({ saleId: billId });
 
-        await session.commitTransaction();
-        session.endSession();
+        // Remove GST ledger entry
+        await GSTLedger.deleteMany({ referenceId: billId });
 
         await ActivityLog.create({
             user: userId,
@@ -245,8 +286,6 @@ export const cancelBill = async (billId, userId) => {
 
         return bill;
     } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
         throw error;
     }
 };

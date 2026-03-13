@@ -27,3 +27,8 @@ export const getSalesReport = asyncHandler(async (req, res) => {
     const data = await reportService.getSalesReport(startDate, endDate, groupBy);
     res.status(200).json(new ApiResponse(200, data, 'Sales report'));
 });
+
+export const getAdvancedAnalytics = asyncHandler(async (req, res) => {
+    const data = await reportService.getAdvancedAnalytics(parseInt(req.query.days) || 30);
+    res.status(200).json(new ApiResponse(200, data, 'Advanced analytics fetched'));
+});

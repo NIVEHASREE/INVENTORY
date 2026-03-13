@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Plus, Search, Edit, AlertTriangle, Package, Layers, IndianRupee, Tag, BarChart3, ShieldCheck } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
 
 const fmtRs = (n) => `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(n || 0)}`;
 
@@ -31,6 +32,8 @@ export default function ProductList() {
 
     useEffect(() => { loadProducts(); }, [loadProducts]);
 
+    const { hasPermission } = useAuth();
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -41,12 +44,14 @@ export default function ProductList() {
                         {meta.total || 0} items in stock
                     </p>
                 </div>
-                <button
-                    onClick={() => { setEditProduct(null); setShowModal(true); }}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold shadow-xl shadow-blue-600/20 transition-all active:scale-[0.98]"
-                >
-                    <Plus size={18} /> Add Product
-                </button>
+                {hasPermission('products', 'create') && (
+                    <button
+                        onClick={() => { setEditProduct(null); setShowModal(true); }}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold shadow-xl shadow-blue-600/20 transition-all active:scale-[0.98]"
+                    >
+                        <Plus size={18} /> Add Product
+                    </button>
+                )}
             </div>
 
             <div className="bg-white rounded-[2rem] border border-slate-50 shadow-sm p-4 flex flex-wrap gap-4">
@@ -128,12 +133,14 @@ export default function ProductList() {
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-right">
-                                            <button
-                                                onClick={() => { setEditProduct(p); setShowModal(true); }}
-                                                className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-white hover:shadow-lg hover:text-blue-600 transition-all border border-transparent hover:border-slate-100 shadow-sm"
-                                            >
-                                                <Edit size={16} />
-                                            </button>
+                                            {hasPermission('products', 'update') && (
+                                                <button
+                                                    onClick={() => { setEditProduct(p); setShowModal(true); }}
+                                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-white hover:shadow-lg hover:text-blue-600 transition-all border border-transparent hover:border-slate-100 shadow-sm"
+                                                >
+                                                    <Edit size={16} />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 );

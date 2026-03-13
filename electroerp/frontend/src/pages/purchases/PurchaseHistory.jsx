@@ -10,7 +10,18 @@ const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit',
 export default function PurchaseHistory() {
     const [purchases, setPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    const [suppliers, setSuppliers] = useState([]);
+    const [showFilters, setShowFilters] = useState(false);
+    const [filters, setFilters] = useState({
+        startDate: '',
+        endDate: '',
+        supplierId: '',
+        status: '',
+        minAmount: '',
+        maxAmount: '',
+        search: ''
+    });
+
     const [showModal, setShowModal] = useState(false);
     const [selectedP, setSelectedP] = useState(null);
     const [submitting, setSubmitting] = useState(false);
@@ -23,16 +34,54 @@ export default function PurchaseHistory() {
 
     const navigate = useNavigate();
 
-    const load = async () => {
+    const load = async (activeFilters = filters) => {
         setLoading(true);
         try {
-            const res = await api.get('/purchases');
+            const query = new URLSearchParams();
+            Object.keys(activeFilters).forEach(key => {
+                if (activeFilters[key]) query.append(key, activeFilters[key]);
+            });
+            const res = await api.get(`/purchases?${query.toString()}`);
             setPurchases(res.data.data || []);
         } catch { toast.error('Failed to load purchase history'); }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { load(); }, []);
+    const fetchSuppliers = async () => {
+        try {
+            const res = await api.get('/suppliers');
+            setSuppliers(res.data.data || []);
+        } catch (err) { console.error(err); }
+    };
+
+    useEffect(() => { 
+        load(); 
+        fetchSuppliers();
+    }, []);
+
+    const handleFilterChange = (field, value) => {
+        setFilters(prev => ({ ...prev, [field]: value }));
+    };
+
+    const runSearch = () => {
+        load(filters);
+    };
+
+    const resetFilters = () => {
+        const reset = {
+            startDate: '',
+            endDate: '',
+            supplierId: '',
+            status: '',
+            minAmount: '',
+            maxAmount: '',
+            search: ''
+        };
+        setFilters(reset);
+        load(reset);
+    };
+
+    const activeFilterCount = Object.values(filters).filter(v => v !== '').length;
 
     const openPaymentModal = (purchase) => {
         setSelectedP(purchase);
@@ -58,12 +107,6 @@ export default function PurchaseHistory() {
         } finally { setSubmitting(false); }
     };
 
-    const filtered = purchases.filter(p =>
-        p.purchaseNumber?.toLowerCase().includes(search.toLowerCase()) ||
-        p.supplier?.name?.toLowerCase().includes(search.toLowerCase()) ||
-        p.supplierInvoiceNo?.toLowerCase().includes(search.toLowerCase())
-    );
-
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -74,23 +117,155 @@ export default function PurchaseHistory() {
                         {purchases.length} recorded acquisitions
                     </p>
                 </div>
-                <button
-                    onClick={() => navigate('/purchases/new')}
-                    className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold shadow-xl shadow-blue-600/20 transition-all active:scale-[0.98]"
-                >
-                    <Plus size={18} /> New Purchase Order
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={`group flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold transition-all border relative ${showFilters ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'bg-white text-slate-600 border-slate-100 hover:border-slate-300 shadow-sm'}`}
+                    >
+                        <Search size={18} className={showFilters ? 'text-blue-400' : 'text-slate-400 group-hover:text-blue-500'} /> 
+                        Filters
+                        {activeFilterCount > 0 && (
+                            <span className="absolute -top-2 -right-2 w-6 h-6 bg-blue-600 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white font-black shadow-lg">
+                                {activeFilterCount}
+                            </span>
+                        )}
+                    </button>
+                    <button
+                        onClick={() => navigate('/purchases/new')}
+                        className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-2xl text-sm font-bold shadow-xl shadow-blue-600/20 transition-all active:scale-[0.98]"
+                    >
+                        <Plus size={18} /> New Order
+                    </button>
+                </div>
             </div>
 
-            <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
-                <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Search by Purchase #, Supplier or Invoice..."
-                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all text-sm"
-                />
-            </div>
+            {showFilters && (
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-2xl shadow-slate-200/40 space-y-6 animate-in slide-in-from-top-4 duration-300 overflow-visible relative z-10">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] opacity-40">System Extraction Parameters</h2>
+                            {activeFilterCount > 0 && (
+                                <button onClick={resetFilters} className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors">
+                                    <X size={10} /> Clear Data
+                                </button>
+                            )}
+                        </div>
+                        <button onClick={() => setShowFilters(false)} className="text-slate-300 hover:text-red-500 transition-colors">
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5 items-end">
+                        {/* Transaction Search */}
+                        <div className="space-y-2 lg:col-span-3">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Transaction Ref.</label>
+                            <div className="relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={14} />
+                                <input
+                                    value={filters.search}
+                                    onChange={e => handleFilterChange('search', e.target.value)}
+                                    onKeyUp={e => e.key === 'Enter' && runSearch()}
+                                    placeholder="PUR-xxxx or INV..."
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-blue-500 transition-all placeholder:text-slate-300"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Supplier Filter */}
+                        <div className="space-y-2 lg:col-span-3">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Supplier Entity</label>
+                            <select
+                                value={filters.supplierId}
+                                onChange={e => { handleFilterChange('supplierId', e.target.value); runSearch(); }}
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                            >
+                                <option value="">All Entities</option>
+                                {suppliers.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Status Filter */}
+                        <div className="space-y-2 lg:col-span-2">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Protocol Status</label>
+                            <select
+                                value={filters.status}
+                                onChange={e => { handleFilterChange('status', e.target.value); runSearch(); }}
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                            >
+                                <option value="">All Statuses</option>
+                                <option value="paid">PAID</option>
+                                <option value="partial">PARTIAL</option>
+                                <option value="credit">CREDIT</option>
+                            </select>
+                        </div>
+
+                        {/* Val Range - Min */}
+                        <div className="space-y-2 lg:col-span-2">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Min Val.</label>
+                            <input
+                                type="number"
+                                placeholder="0.00"
+                                value={filters.minAmount}
+                                onChange={e => handleFilterChange('minAmount', e.target.value)}
+                                onKeyUp={e => e.key === 'Enter' && runSearch()}
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            />
+                        </div>
+
+                        {/* Val Range - Max */}
+                        <div className="space-y-2 lg:col-span-2">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Max Val.</label>
+                            <input
+                                type="number"
+                                placeholder="Any"
+                                value={filters.maxAmount}
+                                onChange={e => handleFilterChange('maxAmount', e.target.value)}
+                                onKeyUp={e => e.key === 'Enter' && runSearch()}
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            />
+                        </div>
+
+                        {/* Date Range Start */}
+                        <div className="space-y-2 lg:col-span-3">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Temporal From</label>
+                            <div className="relative group">
+                                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none group-focus-within:text-blue-500 transition-colors" size={14} />
+                                <input
+                                    type="date"
+                                    value={filters.startDate}
+                                    onChange={e => handleFilterChange('startDate', e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-blue-500 transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Date Range End */}
+                        <div className="space-y-2 lg:col-span-3">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Temporal To</label>
+                            <div className="relative group">
+                                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none group-focus-within:text-blue-500 transition-colors" size={14} />
+                                <input
+                                    type="date"
+                                    value={filters.endDate}
+                                    onChange={e => handleFilterChange('endDate', e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-blue-500 transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Search Button */}
+                        <div className="lg:col-span-6 flex items-end">
+                            <button 
+                                onClick={runSearch}
+                                className="w-full bg-slate-900 text-white py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-slate-900/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                            >
+                                <Search size={14} className="text-blue-400" />
+                                Initiate Filtered Extraction
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-[2rem] border border-slate-50 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
@@ -110,7 +285,7 @@ export default function PurchaseHistory() {
                                 Array(6).fill(0).map((_, i) => (
                                     <tr key={i}><td colSpan={6} className="px-8 py-4"><div className="skeleton h-12 w-full rounded-2xl" /></td></tr>
                                 ))
-                            ) : filtered.map(p => (
+                            ) : purchases.map(p => (
                                 <tr key={p._id} className="group hover:bg-slate-50/20 transition-colors">
                                     <td className="px-8 py-5">
                                         <div className="flex items-center gap-4">
@@ -171,7 +346,7 @@ export default function PurchaseHistory() {
                 </div>
             </div>
 
-            {!loading && filtered.length === 0 && (
+            {!loading && purchases.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
                     <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-slate-300 shadow-sm mb-4">
                         <ShoppingBag size={32} />

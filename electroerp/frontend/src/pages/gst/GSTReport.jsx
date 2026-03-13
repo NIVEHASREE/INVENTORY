@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react';
-import { Calendar, Download, FileText, IndianRupee, PieChart, ShieldCheck, TrendingDown, TrendingUp, ChevronDown, Activity } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Calendar, Download, FileText, IndianRupee, PieChart, ShieldCheck, TrendingDown, TrendingUp, ChevronDown, Activity, FileSpreadsheet, FileCode2, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 const fmtRs = (n) => `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(n || 0)}`;
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const EXPORT_OPTIONS = [
+    { label: 'Excel (.xlsx)', format: 'xlsx', icon: FileSpreadsheet, color: 'text-emerald-600', bg: 'hover:bg-emerald-50' },
+    { label: 'CSV (.csv)', format: 'csv', icon: FileCode2, color: 'text-blue-600', bg: 'hover:bg-blue-50' },
+    { label: 'PDF (.pdf)', format: 'pdf', icon: FileText, color: 'text-red-600', bg: 'hover:bg-red-50' },
+];
 
 export default function GSTReport() {
     const now = new Date();
@@ -14,6 +20,9 @@ export default function GSTReport() {
     const [summary, setSummary] = useState(null);
     const [ledger, setLedger] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [exportOpen, setExportOpen] = useState(false);
+    const [exportingFormat, setExportingFormat] = useState(null);
+    const dropdownRef = useRef(null);
 
     useEffect(() => {
         setLoading(true);
@@ -26,6 +35,46 @@ export default function GSTReport() {
         }).catch(() => toast.error('Failed to anchor GST data'))
             .finally(() => setLoading(false));
     }, [month, year]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handler = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setExportOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const handleExport = async (format) => {
+        setExportingFormat(format);
+        setExportOpen(false);
+        const toastId = toast.loading(`Generating ${format.toUpperCase()} report…`);
+        try {
+            const response = await api.get(`/gst/export?month=${month}&year=${year}&format=${format}`, {
+                responseType: 'blob',
+            });
+
+            const shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const filename = `GST_Protocol_${shortMonths[month - 1]}_${year}.${format}`;
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success(`${filename} downloaded successfully`, { id: toastId });
+        } catch (err) {
+            toast.error(`Export failed: ${err?.response?.data?.message || err.message}`, { id: toastId });
+        } finally {
+            setExportingFormat(null);
+        }
+    };
 
     const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
 
@@ -147,9 +196,47 @@ export default function GSTReport() {
                         <h2 className="text-lg font-black text-slate-900 tracking-tight">Transaction Ledger</h2>
                         <p className="text-[10px] px-1 font-black text-slate-400 uppercase tracking-widest mt-1">GSTR Sequence Matrix — {MONTHS[month - 1]} {year}</p>
                     </div>
-                    <button className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-500 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-                        <Download size={14} /> Export Protocol
-                    </button>
+
+                    {/* ── Export Dropdown ─────────────────── */}
+                    <div className="relative" ref={dropdownRef}>
+                        <button
+                            onClick={() => setExportOpen(o => !o)}
+                            disabled={!!exportingFormat}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border
+                                ${exportOpen
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
+                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-100 hover:border-slate-200'}
+                                ${exportingFormat ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                            {exportingFormat ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                                <Download size={14} />
+                            )}
+                            {exportingFormat ? `Exporting ${exportingFormat.toUpperCase()}…` : 'Export Protocol'}
+                            <ChevronDown size={12} className={`transition-transform duration-200 ${exportOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {exportOpen && (
+                            <div className="absolute right-0 top-12 w-52 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right">
+                                <div className="px-4 py-3 border-b border-slate-50">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Export As</p>
+                                </div>
+                                {EXPORT_OPTIONS.map(({ label, format, icon: Icon, color, bg }) => (
+                                    <button
+                                        key={format}
+                                        onClick={() => handleExport(format)}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest transition-all ${bg} group`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center ${color} group-hover:scale-110 transition-transform`}>
+                                            <Icon size={15} />
+                                        </div>
+                                        <span className="text-slate-700">{label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">

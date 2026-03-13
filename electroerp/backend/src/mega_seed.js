@@ -57,7 +57,7 @@ const seedDB = async () => {
 
         // 2. USERS
         const admin = await User.create({
-            name: 'Vanguard Alpha',
+            name: 'SENTHIL MURUGAN ELECTRICALS',
             email: 'admin@electroerp.com',
             password: 'Admin@123',
             role: adminRole._id,
@@ -260,7 +260,7 @@ const seedDB = async () => {
         }
         logger.info('✅ Revenue Channels Synchronized');
 
-        logger.info('🏁 PROTOCOL COMPLETE: VANGUARD SYSTEM IS NOW FULLY OPERATIONAL');
+        logger.info('🏁 PROTOCOL COMPLETE: SENTHIL MURUGAN ELECTRICALS SYSTEM IS NOW FULLY OPERATIONAL');
         process.exit(0);
     } catch (err) {
         logger.error('❌ SEED FAILURE:', err);

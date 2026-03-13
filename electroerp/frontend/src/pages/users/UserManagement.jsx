@@ -20,7 +20,8 @@ export default function UserManagement() {
             setRoles(rolesRes.data.data?.length ? rolesRes.data.data : [
                 { _id: 'admin_role', name: 'ADMIN' },
                 { _id: 'manager_role', name: 'MANAGER' },
-                { _id: 'cashier_role', name: 'CASHIER' }
+                { _id: 'cashier_role', name: 'CASHIER' },
+                { _id: 'staff_role', name: 'STAFF' }
             ]);
         } catch { toast.error('Failed to load users'); }
         finally { setLoading(false); }
