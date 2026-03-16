@@ -5,13 +5,13 @@ const CartContext = createContext(null);
 export const CartProvider = ({ children }) => {
     const [items, setItems] = useState([]);
 
-    const addItem = useCallback((product) => {
+    const addItem = useCallback((product, qty = 1) => {
         setItems(prev => {
             const existing = prev.find(i => i.product === product._id);
             if (existing) {
                 return prev.map(i =>
                     i.product === product._id
-                        ? { ...i, quantity: i.quantity + 1 }
+                        ? { ...i, quantity: i.quantity + qty }
                         : i
                 );
             }
@@ -25,10 +25,38 @@ export const CartProvider = ({ children }) => {
                 gstRate: product.gstRate,
                 hsnCode: product.hsnCode,
                 unit: product.unit,
-                quantity: 1,
+                quantity: qty,
                 discount: 0,
                 stockQty: product.stockQty,
             }];
+        });
+    }, []);
+
+    const batchAddItems = useCallback((newItemsArr) => {
+        setItems(prev => {
+            const newCart = [...prev];
+            newItemsArr.forEach(({ product, qty }) => {
+                const existingIndex = newCart.findIndex(i => i.product === product._id);
+                if (existingIndex >= 0) {
+                    newCart[existingIndex] = { ...newCart[existingIndex], quantity: newCart[existingIndex].quantity + qty };
+                } else {
+                    newCart.push({
+                        product: product._id,
+                        productName: product.name,
+                        sku: product.sku,
+                        sellingPrice: product.sellingPrice,
+                        costPrice: product.costPrice,
+                        mrp: product.mrp,
+                        gstRate: product.gstRate,
+                        hsnCode: product.hsnCode,
+                        unit: product.unit,
+                        quantity: qty,
+                        discount: 0,
+                        stockQty: product.stockQty,
+                    });
+                }
+            });
+            return newCart;
         });
     }, []);
 
@@ -43,7 +71,7 @@ export const CartProvider = ({ children }) => {
     const clearCart = useCallback(() => setItems([]), []);
 
     return (
-        <CartContext.Provider value={{ items, addItem, updateItem, removeItem, clearCart }}>
+        <CartContext.Provider value={{ items, addItem, batchAddItems, updateItem, removeItem, clearCart }}>
             {children}
         </CartContext.Provider>
     );
