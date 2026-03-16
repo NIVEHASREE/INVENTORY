@@ -101,7 +101,7 @@ export default function Login() {
                                 <input
                                     {...register('email')}
                                     type="email"
-                                    placeholder="admin@electroerp.com"
+                                    placeholder="Enter email"
                                     className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 />
                                 {errors.email && <p className="text-red-400 text-xs mt-1.5">{errors.email.message}</p>}
@@ -113,7 +113,7 @@ export default function Login() {
                                     <input
                                         {...register('password')}
                                         type={showPwd ? 'text' : 'password'}
-                                        placeholder="••••••••"
+                                        placeholder="Enter password"
                                         className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                     />
                                     <button
@@ -137,12 +137,6 @@ export default function Login() {
                             </button>
                         </form>
 
-                        <div className="mt-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                            <p className="text-slate-400 text-xs text-center">Demo credentials</p>
-                            <p className="text-slate-300 text-xs text-center mt-1">
-                                <span className="text-blue-400">admin@electroerp.com</span> / <span className="text-blue-400">Admin@123</span>
-                            </p>
-                        </div>
                     </div>
                 </div>
             </div>

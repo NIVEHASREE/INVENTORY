@@ -6,9 +6,6 @@ import bcrypt from 'bcryptjs';
 const testLogin = async () => {
     try {
         await mongoose.connect(process.env.MONGODB_URI);
-        const email = 'admin@electroerp.com';
-        const password = 'Admin@123';
-        
         const user = await User.findOne({ email }).select('+password');
         if (!user) {
             console.log('User not found');
@@ -16,7 +13,6 @@ const testLogin = async () => {
         }
         
         const isMatch = await bcrypt.compare(password, user.password);
-        console.log(`Password match with 'Admin@123': ${isMatch}`);
         
         process.exit(0);
     } catch (err) {
